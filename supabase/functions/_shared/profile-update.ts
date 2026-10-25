@@ -3,6 +3,7 @@ export class ProfileError extends Error { constructor(message:string,public stat
 export type ProfileDependencies = {
   identify:(token:string)=>Promise<{id:string;email?:string}|null>;
   verifyPassword:(email:string,password:string)=>Promise<{id:string}|null>;
+  checkRateLimit:(id:string)=>Promise<boolean>;
   write:(id:string,input:ProfileInput)=>Promise<unknown>;
 };
 export async function updateVerifiedProfile(token:string,input:unknown,deps:ProfileDependencies):Promise<unknown>{
@@ -12,6 +13,7 @@ export async function updateVerifiedProfile(token:string,input:unknown,deps:Prof
   const body=input as Record<string,unknown>;
   if(typeof body.display_name!=='string'||typeof body.handle!=='string'||typeof body.bio!=='string'||typeof body.password!=='string'||!body.password||body.password.length>1024)throw new ProfileError('Enter your profile details and current password.',400);
   const profile={display_name:body.display_name.trim(),handle:body.handle,bio:body.bio};const invalid=validateProfile(profile);if(invalid)throw new ProfileError(invalid,400);
+  if(!await deps.checkRateLimit(actor.id))throw new ProfileError('Too many verification attempts. Please wait five minutes and try again.',429);
   // Verification is request-scoped and never cached or accepted from the browser.
   const verified=await deps.verifyPassword(actor.email,body.password);
   if(!verified||verified.id!==actor.id)throw new ProfileError('Your password didn’t match. Please try again.',403);

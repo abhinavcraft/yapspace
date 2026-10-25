@@ -4,7 +4,15 @@ import assert from 'node:assert/strict';
 
 // Execute the actual migration against embedded PostgreSQL. Auth and Realtime
 // are minimal test fixtures: this proves SQL policy behavior, not hosted delivery.
-const db = new PGlite();
+const connection=process.env.YAPSPACE_TEST_DATABASE_URL;
+let db;
+if(connection){
+  const url=new URL(connection);
+  if(!['localhost','127.0.0.1','postgres'].includes(url.hostname)||url.pathname!=='/yapspace_test')throw Error('Database tests only accept a local disposable database named yapspace_test.');
+  const {Client}=await import('pg');const client=new Client({connectionString:connection});await client.connect();
+  if((await client.query("select count(*)::int count from pg_tables where schemaname in ('public','auth')")).rows[0].count!==0){await client.end();throw Error('Refusing to alter a nonempty test database. Start a fresh disposable database.');}
+  db={exec:sql=>client.query(sql),query:(sql,params)=>client.query(sql,params),close:()=>client.end()};
+}else db=new PGlite();
 await db.exec(`
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
   create schema auth; create schema realtime;
@@ -17,8 +25,9 @@ await db.exec(`
   grant usage on schema public,auth,realtime to anon,authenticated;
   grant select on realtime.messages to authenticated;
 `);
-await db.exec(await readFile(new URL('../supabase/migrations/202610250001_yapspace.sql',import.meta.url),'utf8'));
-await db.exec(await readFile(new URL('../supabase/migrations/202610250002_profile_editor.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261025000100_yapspace.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261025000200_profile_editor.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261025155628_production_hardening.sql',import.meta.url),'utf8'));
 // The repair must work both after migrations and when run repeatedly.
 await db.exec(await readFile(new URL('../supabase/setup.sql',import.meta.url),'utf8'));
 await db.exec(await readFile(new URL('../supabase/setup.sql',import.meta.url),'utf8'));
@@ -93,5 +102,19 @@ await test('profile username uniqueness cannot be bypassed by the server write',
 await test('profile bio length and reserved names are constrained',async()=>{await denied('select public.update_profile_verified($1,$2,$3,$4)',[A,'alice.new','Alice','x'.repeat(191)],'23514');await denied('select public.update_profile_verified($1,$2,$3,$4)',[A,'admin','Alice','Bio'],'23514');});
 await actor(null,'anon');
 await test('anonymous clients cannot invoke server profile updates',()=>denied('select public.update_profile_verified($1,$2,$3,$4)',[A,'alice.new','Alice','Bio'],'42501'));
+await actor(A);
+await test('clients cannot inspect or reset verification attempts',async()=>{await denied('select * from public.profile_verification_limits',[],'42501');await denied('select public.consume_profile_verification($1)',[A],'42501');});
+await actor(null,'service_role');
+await test('profile password verification is limited to five attempts per window',async()=>{for(let i=0;i<5;i++)assert.equal(await scalar('select public.consume_profile_verification($1)',[A]),true);assert.equal(await scalar('select public.consume_profile_verification($1)',[A]),false);});
+await db.exec('reset role');
+await db.query("update public.profile_verification_limits set window_start=clock_timestamp()-interval '6 minutes' where user_id=$1",[A]);
+await actor(null,'service_role');
+await test('verification attempts recover after the window expires',async()=>assert.equal(await scalar('select public.consume_profile_verification($1)',[A]),true));
+await db.exec('reset role');
+await db.exec("create or replace function realtime.send(payload jsonb,event text,topic text,private boolean) returns void language plpgsql as $$ begin raise exception 'Simulated notification outage'; end; $$;");
+await actor(B);
+await test('notification outage does not discard persisted messages',async()=>{const result=(await rows('select * from public.send_message($1,gen_random_uuid(),$2)',[chat,'Outage fixture']))[0];assert.equal(result.sender_id,B);assert.equal(Number(result.seq),61);});
+await db.exec('reset role');
+if(connection){const {testConcurrency}=await import('./test-concurrency.mjs');await testConcurrency(connection);}
 await db.close();
-console.log(`\n${passed} database checks passed using embedded PostgreSQL. Hosted Auth/WebSocket/concurrency verification is NOT RUN.`);
+console.log(`\n${passed} database checks passed using ${connection?'a real PostgreSQL connection':'embedded PostgreSQL'}. Hosted Auth/WebSocket verification is NOT RUN.`);

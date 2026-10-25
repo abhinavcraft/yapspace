@@ -16,4 +16,10 @@ try{for(const [name,params] of Object.entries(functions)){
 }
 if(missing){console.error('\nRun supabase/setup.sql in your connected Supabase SQL Editor, wait a few seconds, then rerun npm run check:setup.');process.exitCode=1;}
 else console.log('\nAll core RPCs are installed. Live authenticated messaging still requires its separate acceptance checks.');
+const limiter=await fetch(new URL('/rest/v1/rpc/consume_profile_verification',url),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({p_user_id:'00000000-0000-0000-0000-000000000000'}),signal:AbortSignal.timeout(10000)});
+if((await limiter.json()).code!=='42501'){console.error('MISSING server-only profile verification limiter. Apply migration 20261025155628_production_hardening.sql.');process.exitCode=1;}
+else console.log('OK profile limiter installed; client execution denied');
+const edge=await fetch(new URL('/functions/v1/update-profile',url),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(10000)});
+if(edge.status!==401){console.error(`CHECK profile Edge Function: HTTP ${edge.status}. Deploy update-profile and verify that missing user tokens are rejected with 401.`);process.exitCode=1;}
+else console.log('OK profile Edge Function rejects missing user tokens');
 }catch{console.error('Could not reach Supabase. Check the project URL and network connection.');process.exitCode=1;}

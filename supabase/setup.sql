@@ -1,7 +1,6 @@
 -- YapSpace setup / missing-function repair
--- Run this whole file in your connected Supabase project SQL Editor.
--- Re-runnable: preserves rows, only replaces YapSpace-owned functions/policies.
--- If an existing unrelated schema conflicts, the transaction fails safely.
+-- Run the whole file in a dedicated YapSpace project. Existing rows are preserved.
+-- Replaces only YapSpace-owned policies/functions; incompatible schemas fail.
 
 -- YapSpace: private, text-only, two-person conversations.
 -- Narrow SECURITY DEFINER functions are intentional: direct writes are revoked.
@@ -191,4 +190,56 @@ grant execute on function public.update_profile_verified(uuid,text,text,text) to
 notify pgrst,'reload schema';
 commit;
 
-notify pgrst, 'reload schema';
+begin;
+create table if not exists public.profile_verification_limits(
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  window_start timestamptz not null default clock_timestamp(),
+  attempts integer not null default 1 check(attempts>0)
+);
+alter table public.profile_verification_limits enable row level security;
+revoke all on public.profile_verification_limits from public,anon,authenticated;
+grant select,insert,update on public.profile_verification_limits to service_role;
+create or replace function public.consume_profile_verification(p_user_id uuid) returns boolean
+language plpgsql security invoker set search_path='' as $$
+declare total integer;
+begin
+  if p_user_id is null then raise exception 'Identity required' using errcode='22023'; end if;
+  insert into public.profile_verification_limits(user_id) values(p_user_id)
+  on conflict(user_id) do update set
+    attempts=case when public.profile_verification_limits.window_start<=clock_timestamp()-interval '5 minutes' then 1 else least(public.profile_verification_limits.attempts+1,1000000) end,
+    window_start=case when public.profile_verification_limits.window_start<=clock_timestamp()-interval '5 minutes' then clock_timestamp() else public.profile_verification_limits.window_start end
+  returning attempts into total;
+  return total<=5;
+end; $$;
+revoke all on function public.consume_profile_verification(uuid) from public,anon,authenticated;
+grant execute on function public.consume_profile_verification(uuid) to service_role;
+create index if not exists reads_by_user on public.conversation_reads(user_id);
+
+-- Database storage stays available if notification transport fails. Polling and
+-- reconnect catch-up repair missed notifications from the canonical messages.
+create or replace function public.notify_message() returns trigger
+language plpgsql security definer set search_path='' as $$
+begin
+  begin
+    perform realtime.send(jsonb_build_object('conversation_id',new.conversation_id,'message_id',new.id,'seq',new.seq),'message','conversation:'||new.conversation_id::text,true);
+  exception when others then
+    raise warning 'YapSpace notification unavailable; database catch-up required';
+  end;
+  return new;
+end; $$;
+revoke all on function public.notify_message() from public,anon,authenticated;
+notify pgrst,'reload schema';
+commit;
+
+begin;
+-- Supabase's project-level DDL event trigger is not a browser API. Preserve the
+-- trigger and its owner, while removing unnecessary client execution grants.
+do $$ begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    execute 'revoke all on function public.rls_auto_enable() from public, anon, authenticated';
+  end if;
+end; $$;
+notify pgrst,'reload schema';
+commit;
+
+notify pgrst,'reload schema';

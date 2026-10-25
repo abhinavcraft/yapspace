@@ -42,3 +42,11 @@ No measured latency or availability guarantee. No E2EE. No executed hosted three
 - A read-only, unauthenticated REST probe against the locally configured project reproduced PGRST202 for both complete_profile and list_conversations. No live database migrations were applied.
 - Live Edge Function deployment/password verification and version-two browser visual/interaction checks were NOT RUN. Windows browser automation stopped because it could not confidently determine the current browser URL.
 - The user’s local Supabase SDK upgrade and .env.example removal were preserved. The ignored .env file was not uploaded as source. The website build uses the configured public URL and publishable key, which are intentionally public.
+
+## Production-hardening session
+
+34 unit and 45 embedded PostgreSQL checks passed. A separate 17-assertion role matrix passed against the live PostgreSQL database inside a fully rolled-back transaction, leaving the original one profile and zero conversations/messages unchanged. A real anonymous private-channel WebSocket join returned CHANNEL_ERROR and initialized the provider-managed Realtime partitions. Core RPCs and the server limiter deny anonymous execution; the deployed profile function returns 401 without a user token. The unintended DDL-helper client grants were revoked.
+
+The built Worker passed local HTTP checks for CSP, nosniff, no-referrer, and the static health endpoint. The exact production artifact rendered at desktop size without browser errors or a demo fallback. Narrow-screen and demo profile/password/theme checks also passed; these demo checks do not prove live Auth password verification.
+
+The real PostgreSQL concurrency runner is included in CI but was not executed locally (no local PostgreSQL/Docker). Three-account real JWT/WebSocket and SMTP delivery, backup/restore, capacity, and uptime objectives remain unverified. Migration-history baseline repair was blocked by automatic approval review and was not performed. See docs/PRODUCTION_READINESS.md for current release gates.

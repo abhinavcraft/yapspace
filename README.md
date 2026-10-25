@@ -26,7 +26,7 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_public_key
 ```
 
-6. Restart the dev server, or rebuild and redeploy. These are Vite build-time values. Never put secret/service-role keys in `VITE_*` variables. No admin key is needed by this app.
+6. Restart the dev server, or rebuild and redeploy. These are Vite build-time values. Never put secret/service-role keys in `VITE_*` variables. No admin key belongs in the frontend; the profile Edge Function uses Supabase’s injected server-only service-role key.
 7. Sign up with two test accounts in separate browsers, confirm their emails, choose their handles, then find one account by handle from the other.
 8. Complete the real-service acceptance checks in `docs/verification.md` before allowing real users or claiming production security.
 
@@ -61,3 +61,11 @@ YapSpace now defaults to a minimal dark interface with violet accents. Light mod
 The About you page edits display name, username, and a 190-character bio, with a live profile preview. Every save requires the current password. Live saves are verified in the included Supabase Edge Function; direct client writes and direct access to its write RPC are denied. Passwords are neither stored in profiles nor written to browser storage. Demo mode uses the clearly labeled sample password `yapspace-demo` and saves only demo profile data locally.
 
 **Missing complete_profile / schema-cache error:** follow [the database repair guide](docs/FIX_DATABASE_SETUP.md), run `supabase/setup.sql`, and then run `npm run check:setup`. Deploy the `update-profile` Edge Function for real profile editing. The function is an explicitly server-only use of Supabase’s injected administrative credential; no admin credential is bundled in the website.
+
+## Production release gates
+
+See [the current readiness report](docs/PRODUCTION_READINESS.md). `npm run verify` runs local checks; `npm run check:setup` checks live RPC/Edge Function exposure; `npm run test:live` exercises three disposable staging accounts. CI also runs independent-connection tests against disposable PostgreSQL 17. No staging credentials or backup evidence are assumed.
+
+Production builds require valid public Supabase configuration. A demo build must explicitly set `VITE_ENABLE_DEMO=true`; the normal production build has no demo entry point. The Vite build is converted into a self-contained Worker to enforce actual response headers, because the original static host ignored _headers. The frontend still uses Supabase directly for authenticated data. Fonts are self-hosted; licenses are under public/licenses.
+
+The existing project’s two manual baseline migrations are awaiting explicit approval for history reconciliation. Read [the migration history review](docs/MIGRATION_HISTORY_REVIEW.md) before using CLI db push.

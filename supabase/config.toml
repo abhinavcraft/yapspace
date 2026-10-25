@@ -1,3 +1,5 @@
+project_id = "yapspace"
+
 # The function validates the caller's JWT through auth.getUser itself; this also
 # supports current asymmetric signing keys. Password checks happen server-side.
 [functions.update-profile]

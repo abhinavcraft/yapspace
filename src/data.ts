@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Conversation, Message, Profile } from './types';
-import { databaseError, validateProfile, type ProfileInput } from './profile-validation';
+import { databaseError, validateProfile, SessionExpiredError, type ProfileInput } from './profile-validation';
+import { timedFetch } from './network';
 const env = (import.meta as unknown as { env: Record<string,string> }).env;
 const url = env.VITE_SUPABASE_URL; const key = env.VITE_SUPABASE_PUBLISHABLE_KEY;
-export const supabase = url && key?.startsWith('sb_publishable_') ? createClient(url,key) : null;
+export const demoEnabled = env.MODE==='development'||env.VITE_ENABLE_DEMO==='true';
+export const supabase = url && key?.startsWith('sb_publishable_') ? createClient(url,key,{global:{fetch:timedFetch}}) : null;
 export const defaultDemoUser: Profile = {id:'you',handle:'alex.morgan',display_name:'Alex Morgan',bio:'Here for good conversations, late-night ideas, and a really good coffee. ☕'};
 export function loadDemoProfile(): Profile {try {const value=JSON.parse(localStorage.getItem('yapspace.demo.profile')||'null');if(value?.id==='you'&&value.display_name&&value.handle)return value;}catch{}return defaultDemoUser;}
 export const demoUser = loadDemoProfile();
@@ -40,7 +42,7 @@ export function syncDemo(){demo=loadDemo();}
 async function rpc<T>(name:string,params:Record<string,unknown>={}):Promise<T>{const {data,error}=await supabase!.rpc(name,params);if(error)throw databaseError(error);return data as T;}
 async function rpcRow<T>(name:string,params:Record<string,unknown>):Promise<T>{const {data,error}=await supabase!.rpc(name,params).single();if(error)throw databaseError(error);if(!data)throw new Error('The database did not confirm this operation.');return data as T;}
 export const api = {
-  async profile():Promise<Profile|null>{const {data,error}=await supabase!.from('profiles').select('id,handle,display_name,bio').eq('id',(await supabase!.auth.getUser()).data.user!.id).maybeSingle();if(error)throw databaseError(error);return data;},
+  async profile():Promise<Profile|null>{const {data:auth,error:authError}=await supabase!.auth.getUser();if(authError||!auth.user)throw new SessionExpiredError();const {data,error}=await supabase!.from('profiles').select('id,handle,display_name,bio').eq('id',auth.user.id).maybeSingle();if(error)throw databaseError(error);return data;},
   async completeProfile(handle:string,name:string){return rpcRow<Profile>('complete_profile',{p_handle:handle,p_display_name:name});},
   async updateProfile(isDemo:boolean,input:ProfileInput,password:string):Promise<Profile>{
     const invalid=validateProfile(input);if(invalid)throw new Error(invalid);
