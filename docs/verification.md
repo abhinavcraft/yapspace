@@ -33,3 +33,12 @@ Run `npm test`, `npm run test:db`, and `npm run build`. The SQL runner prints ea
 ## Not claimed
 
 No measured latency or availability guarantee. No E2EE. No executed hosted three-account test, real WebSocket test, production load test, backup restoration, or multi-connection concurrency test until the project is connected and the corresponding checks are run.
+
+## Version-two update, 2026-10-25
+
+- `npm test`: 20 unit checks passed, including the request-scoped password verification boundary and missing-function diagnostics.
+- `npm run test:db`: 41 embedded PostgreSQL checks passed. The complete setup/repair SQL was run twice after applying both migrations to verify re-runnability without losing rows.
+- `npm run build`: TypeScript and production build passed.
+- A read-only, unauthenticated REST probe against the locally configured project reproduced PGRST202 for both complete_profile and list_conversations. No live database migrations were applied.
+- Live Edge Function deployment/password verification and version-two browser visual/interaction checks were NOT RUN. Windows browser automation stopped because it could not confidently determine the current browser URL.
+- The user’s local Supabase SDK upgrade and .env.example removal were preserved. The ignored .env file was not uploaded as source. The website build uses the configured public URL and publishable key, which are intentionally public.

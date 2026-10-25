@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 // are minimal test fixtures: this proves SQL policy behavior, not hosted delivery.
 const db = new PGlite();
 await db.exec(`
-  create role anon nologin; create role authenticated nologin;
+  create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
   create schema auth; create schema realtime;
   create table auth.users(id uuid primary key);
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
@@ -18,6 +18,10 @@ await db.exec(`
   grant select on realtime.messages to authenticated;
 `);
 await db.exec(await readFile(new URL('../supabase/migrations/202610250001_yapspace.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/202610250002_profile_editor.sql',import.meta.url),'utf8'));
+// The repair must work both after migrations and when run repeatedly.
+await db.exec(await readFile(new URL('../supabase/setup.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/setup.sql',import.meta.url),'utf8'));
 let passed=0;
 async function test(name,fn){await fn();passed++;console.log(`PASS ${name}`);}
 async function rows(sql,params=[]){return (await db.query(sql,params)).rows;}
@@ -80,5 +84,14 @@ await test('sequence has no gaps from rejected transactions',async()=>{const dat
 await db.exec('reset role');
 await test('all exposed app tables have RLS enabled',async()=>{const flags=await rows("select relrowsecurity from pg_class where oid in ('public.profiles'::regclass,'public.conversations'::regclass,'public.messages'::regclass,'public.conversation_reads'::regclass)");assert.equal(flags.length,4);assert.ok(flags.every(x=>x.relrowsecurity));});
 await test('definer functions have fixed search_path and no public execution',async()=>{const functions=await rows("select p.oid,p.proconfig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef");for(const fn of functions){assert.ok(fn.proconfig.includes('search_path=""'));assert.equal(await scalar('select has_function_privilege(\'anon\',$1,\'execute\')',[fn.oid]),false);}});
+await actor(A);
+await test('authenticated clients cannot bypass password verification through profile RPC',()=>denied('select public.update_profile_verified($1,$2,$3,$4)',[A,'alice.new','New Alice','Bio'],'42501'));
+await test('authenticated clients cannot directly update profile fields',()=>denied('update public.profiles set display_name=$1 where id=$2',['Spoof',A],'42501'));
+await actor(null,'service_role');
+await test('server profile write preserves identity and saves allowed fields',async()=>{const result=(await rows('select * from public.update_profile_verified($1,$2,$3,$4)',[A,'alice.new','New Alice','A new bio']))[0];assert.equal(result.id,A);assert.equal(result.handle,'alice.new');assert.equal(result.display_name,'New Alice');assert.equal(result.bio,'A new bio');});
+await test('profile username uniqueness cannot be bypassed by the server write',()=>denied('select public.update_profile_verified($1,$2,$3,$4)',[A,'bruno','Alice','Bio'],'23505'));
+await test('profile bio length and reserved names are constrained',async()=>{await denied('select public.update_profile_verified($1,$2,$3,$4)',[A,'alice.new','Alice','x'.repeat(191)],'23514');await denied('select public.update_profile_verified($1,$2,$3,$4)',[A,'admin','Alice','Bio'],'23514');});
+await actor(null,'anon');
+await test('anonymous clients cannot invoke server profile updates',()=>denied('select public.update_profile_verified($1,$2,$3,$4)',[A,'alice.new','Alice','Bio'],'42501'));
 await db.close();
 console.log(`\n${passed} database checks passed using embedded PostgreSQL. Hosted Auth/WebSocket/concurrency verification is NOT RUN.`);

@@ -1,9 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Conversation, Message, Profile } from './types';
+import { databaseError, validateProfile, type ProfileInput } from './profile-validation';
 const env = (import.meta as unknown as { env: Record<string,string> }).env;
 const url = env.VITE_SUPABASE_URL; const key = env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const supabase = url && key?.startsWith('sb_publishable_') ? createClient(url,key) : null;
-export const demoUser: Profile = {id:'you',handle:'alex.morgan',display_name:'Alex Morgan'};
+export const defaultDemoUser: Profile = {id:'you',handle:'alex.morgan',display_name:'Alex Morgan',bio:'Here for good conversations, late-night ideas, and a really good coffee. ☕'};
+export function loadDemoProfile(): Profile {try {const value=JSON.parse(localStorage.getItem('yapspace.demo.profile')||'null');if(value?.id==='you'&&value.display_name&&value.handle)return value;}catch{}return defaultDemoUser;}
+export const demoUser = loadDemoProfile();
 export const demoPeople: Profile[] = [
   {id:'maya',display_name:'Maya Chen',handle:'maya.chen'}, {id:'jordan',display_name:'Jordan Lee',handle:'jordan.lee'},
   {id:'sofia',display_name:'Sofia Martinez',handle:'sofia.m'}, {id:'oliver',display_name:'Oliver Park',handle:'oliver.park'},
@@ -34,11 +37,19 @@ let demo = loadDemo();
 function saveDemo(){localStorage.setItem('yapspace.demo.v1',JSON.stringify(demo));}
 export function resetDemo(){demo=seed();saveDemo();}
 export function syncDemo(){demo=loadDemo();}
-async function rpc<T>(name:string,params:Record<string,unknown>={}):Promise<T>{const {data,error}=await supabase!.rpc(name,params);if(error)throw new Error(error.message);return data as T;}
-async function rpcRow<T>(name:string,params:Record<string,unknown>):Promise<T>{const {data,error}=await supabase!.rpc(name,params).single();if(error)throw new Error(error.message);if(!data)throw new Error('The database did not confirm this operation.');return data as T;}
+async function rpc<T>(name:string,params:Record<string,unknown>={}):Promise<T>{const {data,error}=await supabase!.rpc(name,params);if(error)throw databaseError(error);return data as T;}
+async function rpcRow<T>(name:string,params:Record<string,unknown>):Promise<T>{const {data,error}=await supabase!.rpc(name,params).single();if(error)throw databaseError(error);if(!data)throw new Error('The database did not confirm this operation.');return data as T;}
 export const api = {
-  async profile():Promise<Profile|null>{const {data,error}=await supabase!.from('profiles').select('id,handle,display_name').eq('id',(await supabase!.auth.getUser()).data.user!.id).maybeSingle();if(error)throw error;return data;},
+  async profile():Promise<Profile|null>{const {data,error}=await supabase!.from('profiles').select('id,handle,display_name,bio').eq('id',(await supabase!.auth.getUser()).data.user!.id).maybeSingle();if(error)throw databaseError(error);return data;},
   async completeProfile(handle:string,name:string){return rpcRow<Profile>('complete_profile',{p_handle:handle,p_display_name:name});},
+  async updateProfile(isDemo:boolean,input:ProfileInput,password:string):Promise<Profile>{
+    const invalid=validateProfile(input);if(invalid)throw new Error(invalid);
+    if(!password)throw new Error('Enter your current password to save changes.');
+    if(isDemo){if(password!=='yapspace-demo')throw new Error('That demo password doesn’t match. Use yapspace-demo.');const p={...defaultDemoUser,...input,display_name:input.display_name.trim()};localStorage.setItem('yapspace.demo.profile',JSON.stringify(p));return p;}
+    const {data,error}=await supabase!.functions.invoke('update-profile',{body:{...input,password}});
+    if(error){let message='Could not update your profile. Check your password and try again.';try{const detail=await (error as {context?:Response}).context?.json();if(detail?.error)message=detail.error;}catch{}throw new Error(message);}
+    return data as Profile;
+  },
   async conversations(isDemo:boolean):Promise<Conversation[]>{
     if(!isDemo) return rpc<Conversation[]>('list_conversations');
     return Object.entries(demo.threads).map(([id,msgs])=>{const p=demoPeople.find(p=>p.id===id)!;const last=msgs.at(-1);return {id,peer_id:p.id,handle:p.handle,display_name:p.display_name,last_body:last?.body||null,last_message_at:last?.created_at||null,last_seq:last?.seq||0,unread_count:msgs.filter(m=>m.sender_id!=='you'&&m.seq>(demo.reads[id]||0)).length};}).sort((a,b)=>(b.last_message_at||'').localeCompare(a.last_message_at||''));
