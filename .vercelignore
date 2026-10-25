@@ -1,0 +1,10 @@
+.git
+.openai
+.env
+.env.*
+node_modules
+dist
+.site-build
+.local-postgres-*
+docs
+*.tsbuildinfo

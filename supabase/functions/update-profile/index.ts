@@ -4,7 +4,7 @@ import { allowedOrigin, readBoundedJSON } from '../_shared/http-security.ts';
 
 Deno.serve(async request=>{
   const origin=request.headers.get('origin');
-  const allowed=allowedOrigin(origin,Deno.env.get('YAPSPACE_ALLOWED_ORIGINS')||'https://yapspace-private-messaging.vocaldaisy6.chatgpt.site');
+  const allowed=allowedOrigin(origin,Deno.env.get('YAPSPACE_ALLOWED_ORIGINS')||'https://yapspace.lol,https://yapspace-agnivya.vercel.app,https://yapspace-beta.vercel.app,https://yapspace-private-messaging.vocaldaisy6.chatgpt.site');
   const cors:Record<string,string>={'Access-Control-Allow-Headers':'authorization,x-client-info,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS','Cache-Control':'no-store','Content-Type':'application/json','X-Content-Type-Options':'nosniff','Vary':'Origin'};
   if(allowed)cors['Access-Control-Allow-Origin']=allowed;
   if(origin&&!allowed)return new Response(JSON.stringify({error:'Origin not allowed'}),{status:403,headers:cors});

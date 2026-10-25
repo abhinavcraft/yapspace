@@ -8,3 +8,5 @@ dist/
 .openai/local/
 
 .site-build/
+.local-postgres-*/
+.vercel/

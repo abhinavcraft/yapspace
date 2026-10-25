@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { ArrowLeft, KeyRound, LoaderCircle } from 'lucide-react';
 import { supabase } from './data';
+import { emailRedirectUrl } from './auth-redirect';
 export function RecoveryRequest({onBack}:{onBack:()=>void}) {
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[sent,setSent]=useState(false);
-  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const email=String(new FormData(e.currentTarget).get('email'));try{const {error}=await supabase!.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});if(error)throw error;setSent(true);}catch{setError('Could not request a reset right now. Please wait a little and try again.');}finally{setBusy(false);}}
+  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const email=String(new FormData(e.currentTarget).get('email'));try{const {error}=await supabase!.auth.resetPasswordForEmail(email,{redirectTo:emailRedirectUrl()});if(error)throw error;setSent(true);}catch{setError('Could not request a reset right now. Please wait a little and try again.');}finally{setBusy(false);}}
   return <main className="recovery-page"><section><span className="welcome-mark"><KeyRound size={28}/></span><h1>A way back in.</h1><p>We’ll send a password reset link to your email.</p>{sent?<p className="form-notice" role="status">If an account exists for that email, a reset link is on its way. Check your inbox and spam folder.</p>:<form onSubmit={submit}><label>Email address<input type="email" name="email" autoComplete="email" required placeholder="you@example.com"/></label>{error&&<p className="form-error" role="alert">{error}</p>}<button className="primary-button" disabled={busy}>{busy?<LoaderCircle size={17} className="spin"/>:'Send reset link'}</button></form>}<button className="text-button" onClick={onBack}><ArrowLeft size={15}/>Back to sign in</button></section></main>;
 }
 export function ResetPassword({onComplete}:{onComplete:()=>void}){
