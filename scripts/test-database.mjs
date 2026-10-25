@@ -1,0 +1,84 @@
+import { PGlite } from '@electric-sql/pglite';
+import { readFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+
+// Execute the actual migration against embedded PostgreSQL. Auth and Realtime
+// are minimal test fixtures: this proves SQL policy behavior, not hosted delivery.
+const db = new PGlite();
+await db.exec(`
+  create role anon nologin; create role authenticated nologin;
+  create schema auth; create schema realtime;
+  create table auth.users(id uuid primary key);
+  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+  create table realtime.messages(id bigint generated always as identity,extension text,topic text,payload jsonb);
+  alter table realtime.messages enable row level security;
+  create function realtime.topic() returns text language sql stable as $$ select current_setting('realtime.topic',true) $$;
+  create function realtime.send(payload jsonb,event text,topic text,private boolean) returns void language sql as $$ insert into realtime.messages(extension,topic,payload) values('broadcast',topic,payload) $$;
+  grant usage on schema public,auth,realtime to anon,authenticated;
+  grant select on realtime.messages to authenticated;
+`);
+await db.exec(await readFile(new URL('../supabase/migrations/202610250001_yapspace.sql',import.meta.url),'utf8'));
+let passed=0;
+async function test(name,fn){await fn();passed++;console.log(`PASS ${name}`);}
+async function rows(sql,params=[]){return (await db.query(sql,params)).rows;}
+async function scalar(sql,params=[]){return Object.values((await rows(sql,params))[0])[0];}
+async function actor(id,role='authenticated'){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id||'']);await db.exec(`set role ${role}`);}
+async function denied(sql,params=[],code){await assert.rejects(()=>db.query(sql,params),e=>!code||e.code===code);}
+const A='00000000-0000-0000-0000-000000000001', B='00000000-0000-0000-0000-000000000002', C='00000000-0000-0000-0000-000000000003';
+await db.query('insert into auth.users values($1),($2),($3)',[A,B,C]);
+for(const [id,name] of [[A,'alice'],[B,'bruno'],[C,'casey']]){await actor(id);await db.query('select public.complete_profile($1,$2)',[name,name]);}
+await actor(A);
+const chat=await scalar('select public.get_or_create_direct_conversation($1)',[B]);
+await test('unique unordered pair survives reversed creation',async()=>{await actor(B);assert.equal(await scalar('select public.get_or_create_direct_conversation($1)',[A]),chat);});
+await actor(A);
+await test('self-chat denied',()=>denied('select public.get_or_create_direct_conversation($1)',[A],'22023'));
+await test('outsider profile is not directly enumerable',async()=>assert.equal((await rows('select * from public.profiles where id=$1',[C])).length,0));
+await test('directory requires at least two literal characters',async()=>{assert.equal((await rows("select * from public.search_profiles('%')")).length,0);assert.equal((await rows("select * from public.search_profiles('%%')")).length,0);assert.equal((await rows("select * from public.search_profiles('br')")).length,1);});
+const key='10000000-0000-0000-0000-000000000001';
+const first=(await rows('select * from public.send_message($1,$2,$3)',[chat,key,'Hello Bruno']))[0];
+await test('sender and sequence assigned by database',async()=>{assert.equal(first.sender_id,A);assert.equal(Number(first.seq),1);});
+await test('retry returns the same canonical row without advancing sequence',async()=>{const retry=(await rows('select * from public.send_message($1,$2,$3)',[chat,key,'Hello Bruno']))[0];assert.equal(retry.id,first.id);assert.equal(Number(await scalar('select next_seq from public.conversations where id=$1',[chat])),2);});
+await test('idempotency key rejects modified content',()=>denied('select public.send_message($1,$2,$3)',[chat,key,'Different body'],'22023'));
+await test('whitespace and overlong messages denied',async()=>{await denied('select public.send_message($1,gen_random_uuid(),$2)',[chat,' \n\t '],'22023');await denied('select public.send_message($1,gen_random_uuid(),$2)',[chat,'x'.repeat(4001)],'22023');});
+await test('direct message insert and forged sender denied',()=>denied('insert into public.messages(conversation_id,sender_id,client_message_id,seq,body) values($1,$2,gen_random_uuid(),7,$3)',[chat,B,'forged'],'42501'));
+await test('direct conversation participant mutation denied',()=>denied('update public.conversations set user_high_id=$1 where id=$2',[C,chat],'42501'));
+await test('direct read cursor write denied',()=>denied('insert into public.conversation_reads values($1,$2,1,now())',[chat,B],'42501'));
+await test('message edits and deletion denied',async()=>{await denied("update public.messages set body='changed'",[],'42501');await denied('delete from public.messages',[],'42501');});
+await actor(B);
+await test('participant reads persisted history',async()=>assert.equal((await rows('select * from public.messages where conversation_id=$1',[chat])).length,1));
+await test('unread counts only messages by the other participant',async()=>assert.equal(Number((await rows('select * from public.list_conversations()'))[0].unread_count),1));
+await db.query('select public.advance_read_cursor($1,100)',[chat]);
+await test('read cursor clamps to committed sequence',async()=>assert.equal(Number(await scalar('select last_read_seq from public.conversation_reads')),1));
+await db.query('select public.advance_read_cursor($1,0)',[chat]);
+await test('read cursor cannot go backwards',async()=>assert.equal(Number(await scalar('select last_read_seq from public.conversation_reads')),1));
+await test('unread resets after read',async()=>assert.equal(Number((await rows('select * from public.list_conversations()'))[0].unread_count),0));
+await db.query("select set_config('realtime.topic',$1,false)",['conversation:'+chat]);
+await test('participant authorized for matching private topic',async()=>assert.equal((await rows('select * from realtime.messages')).length,1));
+await db.query("select set_config('realtime.topic','invalid-topic',false)");
+await test('malformed topic denied without casting errors',async()=>assert.equal((await rows('select * from realtime.messages')).length,0));
+await actor(A);
+await test('other participant cannot retrieve private read cursor',async()=>assert.equal((await rows('select * from public.conversation_reads')).length,0));
+const other=await scalar('select public.get_or_create_direct_conversation($1)',[C]);
+await test('retry key cannot be reused in another conversation',()=>denied('select public.send_message($1,$2,$3)',[other,key,'Hello Bruno'],'22023'));
+await actor(C);
+await test('outsider cannot read private messages',async()=>assert.equal((await rows('select * from public.messages where conversation_id=$1',[chat])).length,0));
+await test('outsider cannot retrieve conversation',async()=>assert.equal((await rows('select * from public.conversations where id=$1',[chat])).length,0));
+await test('outsider cannot send into guessed conversation',()=>denied('select public.send_message($1,gen_random_uuid(),$2)',[chat,'intrusion'],'42501'));
+await test('outsider cannot advance read cursor',()=>denied('select public.advance_read_cursor($1,1)',[chat],'42501'));
+await db.query("select set_config('realtime.topic',$1,false)",['conversation:'+chat]);
+await test('outsider denied private topic rows',async()=>assert.equal((await rows('select * from realtime.messages')).length,0));
+await test('client cannot broadcast authoritative messages',()=>denied("insert into realtime.messages(extension,topic,payload) values('broadcast',$1,'{}')",['conversation:'+chat],'42501'));
+await actor(null,'anon');
+await test('anonymous message reads denied',()=>denied('select * from public.messages',[],'42501'));
+await test('anonymous RPC execution denied',()=>denied('select public.list_conversations()',[],'42501'));
+await actor(null);
+await test('authenticated role without identity cannot send',()=>denied('select public.send_message($1,gen_random_uuid(),$2)',[chat,'no actor'],'42501'));
+await actor(A);
+await test('rate limit is enforced in the database',async()=>{for(let i=0;i<59;i++)await db.query('select public.send_message($1,gen_random_uuid(),$2)',[chat,'rate test '+i]);await denied('select public.send_message($1,gen_random_uuid(),$2)',[chat,'over limit'],'P0001');});
+await test('idempotent retry remains available when rate limited',async()=>assert.equal((await rows('select * from public.send_message($1,$2,$3)',[chat,key,'Hello Bruno']))[0].id,first.id));
+await test('sequence has no gaps from rejected transactions',async()=>{const data=await rows('select seq from public.messages where conversation_id=$1 order by seq',[chat]);assert.deepEqual(data.map(x=>Number(x.seq)),Array.from({length:60},(_,i)=>i+1));});
+await db.exec('reset role');
+await test('all exposed app tables have RLS enabled',async()=>{const flags=await rows("select relrowsecurity from pg_class where oid in ('public.profiles'::regclass,'public.conversations'::regclass,'public.messages'::regclass,'public.conversation_reads'::regclass)");assert.equal(flags.length,4);assert.ok(flags.every(x=>x.relrowsecurity));});
+await test('definer functions have fixed search_path and no public execution',async()=>{const functions=await rows("select p.oid,p.proconfig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef");for(const fn of functions){assert.ok(fn.proconfig.includes('search_path=""'));assert.equal(await scalar('select has_function_privilege(\'anon\',$1,\'execute\')',[fn.oid]),false);}});
+await db.close();
+console.log(`\n${passed} database checks passed using embedded PostgreSQL. Hosted Auth/WebSocket/concurrency verification is NOT RUN.`);
