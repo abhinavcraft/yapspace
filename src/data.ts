@@ -35,9 +35,10 @@ function saveDemo(){localStorage.setItem('yapspace.demo.v1',JSON.stringify(demo)
 export function resetDemo(){demo=seed();saveDemo();}
 export function syncDemo(){demo=loadDemo();}
 async function rpc<T>(name:string,params:Record<string,unknown>={}):Promise<T>{const {data,error}=await supabase!.rpc(name,params);if(error)throw new Error(error.message);return data as T;}
+async function rpcRow<T>(name:string,params:Record<string,unknown>):Promise<T>{const {data,error}=await supabase!.rpc(name,params).single();if(error)throw new Error(error.message);if(!data)throw new Error('The database did not confirm this operation.');return data as T;}
 export const api = {
   async profile():Promise<Profile|null>{const {data,error}=await supabase!.from('profiles').select('id,handle,display_name').eq('id',(await supabase!.auth.getUser()).data.user!.id).maybeSingle();if(error)throw error;return data;},
-  async completeProfile(handle:string,name:string){return rpc<Profile>('complete_profile',{p_handle:handle,p_display_name:name});},
+  async completeProfile(handle:string,name:string){return rpcRow<Profile>('complete_profile',{p_handle:handle,p_display_name:name});},
   async conversations(isDemo:boolean):Promise<Conversation[]>{
     if(!isDemo) return rpc<Conversation[]>('list_conversations');
     return Object.entries(demo.threads).map(([id,msgs])=>{const p=demoPeople.find(p=>p.id===id)!;const last=msgs.at(-1);return {id,peer_id:p.id,handle:p.handle,display_name:p.display_name,last_body:last?.body||null,last_message_at:last?.created_at||null,last_seq:last?.seq||0,unread_count:msgs.filter(m=>m.sender_id!=='you'&&m.seq>(demo.reads[id]||0)).length};}).sort((a,b)=>(b.last_message_at||'').localeCompare(a.last_message_at||''));
@@ -49,7 +50,7 @@ export const api = {
     const {data,error}=await q.order('seq',{ascending:after!==undefined}).limit(after===undefined?50:100);if(error)throw error;return (data as Message[]).sort((a,b)=>a.seq-b.seq);
   },
   async send(isDemo:boolean,message:Message):Promise<Message>{
-    if(!isDemo)return rpc<Message>('send_message',{p_conversation_id:message.conversation_id,p_client_message_id:message.client_message_id,p_body:message.body});
+    if(!isDemo)return rpcRow<Message>('send_message',{p_conversation_id:message.conversation_id,p_client_message_id:message.client_message_id,p_body:message.body});
     const list=demo.threads[message.conversation_id]||[];const old=list.find(m=>m.client_message_id===message.client_message_id);if(old)return old;
     const saved={...message,id:crypto.randomUUID(),seq:(list.at(-1)?.seq||0)+1,status:undefined,created_at:new Date().toISOString()};list.push(saved);demo.threads[message.conversation_id]=list;saveDemo();return saved;
   },
