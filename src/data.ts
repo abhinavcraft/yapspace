@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Conversation, Message, Profile } from './types';
 import { databaseError, validateProfile, SessionExpiredError, requiresReauthentication, type ProfileInput } from './profile-validation';
 import { timedFetch } from './network';
+import { withAccountSession } from './account-session';
 const env = (import.meta as unknown as { env: Record<string,string> }).env;
 const url = env.VITE_SUPABASE_URL; const key = env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const demoEnabled = env.MODE==='development'||env.VITE_ENABLE_DEMO==='true';
@@ -41,9 +42,10 @@ export function resetDemo(){demo=seed();saveDemo();}
 export function syncDemo(){demo=loadDemo();}
 async function rpc<T>(name:string,params:Record<string,unknown>={}):Promise<T>{const {data,error}=await supabase!.rpc(name,params);if(error)throw databaseError(error);return data as T;}
 async function rpcRow<T>(name:string,params:Record<string,unknown>):Promise<T>{const {data,error}=await supabase!.rpc(name,params).single();if(error)throw databaseError(error);if(!data)throw new Error('The database did not confirm this operation.');return data as T;}
+async function accountSession(){const {data,error}=await supabase!.auth.getSession();if(error){if(requiresReauthentication(error))throw new SessionExpiredError();throw error;}return data.session;}
 export const api = {
-  async profile():Promise<Profile|null>{const {data:auth,error:authError}=await supabase!.auth.getUser();if(authError){if(requiresReauthentication(authError))throw new SessionExpiredError();throw authError;}if(!auth.user)throw new SessionExpiredError();const {data,error}=await supabase!.from('profiles').select('id,handle,display_name,bio').eq('id',auth.user.id).maybeSingle();if(error)throw databaseError(error);return data;},
-  async completeProfile(handle:string,name:string){return rpcRow<Profile>('complete_profile',{p_handle:handle,p_display_name:name});},
+  async profile(accountId:string):Promise<Profile|null>{return withAccountSession(accountId,accountSession,async token=>{const {data,error}=await supabase!.from('profiles').select('id,handle,display_name,bio').eq('id',accountId).setHeader('Authorization','Bearer '+token).maybeSingle();if(error)throw databaseError(error);if(data&&data.id!==accountId)throw new SessionExpiredError();return data;});},
+  async completeProfile(accountId:string,handle:string,name:string){return withAccountSession(accountId,accountSession,async token=>{const {data,error}=await supabase!.rpc('complete_profile',{p_handle:handle,p_display_name:name}).setHeader('Authorization','Bearer '+token).single<Profile>();if(error)throw databaseError(error);if(!data||data.id!==accountId)throw new SessionExpiredError();return data as Profile;});},
   async updateProfile(isDemo:boolean,input:ProfileInput,password:string):Promise<Profile>{
     const invalid=validateProfile(input);if(invalid)throw new Error(invalid);
     if(!password)throw new Error('Enter your current password to save changes.');

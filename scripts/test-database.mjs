@@ -50,6 +50,15 @@ await test('directory requires at least two literal characters',async()=>{assert
 const key='10000000-0000-0000-0000-000000000001';
 const first=(await rows('select * from public.send_message($1,$2,$3)',[chat,key,'Hello Bruno']))[0];
 await test('sender and sequence assigned by database',async()=>{assert.equal(first.sender_id,A);assert.equal(Number(first.seq),1);});
+await test('repeated account setup preserves the existing identity, profile and history',async()=>{
+  const before=(await rows('select id,handle,display_name,bio from public.profiles where id=$1',[A]))[0];
+  const repeated=(await rows('select * from public.complete_profile($1,$2)',['another.alice','Replacement name']))[0];
+  assert.equal(repeated.id,A);
+  assert.deepEqual((await rows('select id,handle,display_name,bio from public.profiles where id=$1',[A]))[0],before);
+  assert.equal(Number(await scalar('select count(*) from public.profiles where id=$1',[A])),1);
+  assert.equal((await rows('select id from public.messages where id=$1',[first.id]))[0].id,first.id);
+  assert.equal((await rows('select id from public.conversations where id=$1',[chat]))[0].id,chat);
+});
 await test('retry returns the same canonical row without advancing sequence',async()=>{const retry=(await rows('select * from public.send_message($1,$2,$3)',[chat,key,'Hello Bruno']))[0];assert.equal(retry.id,first.id);assert.equal(Number(await scalar('select next_seq from public.conversations where id=$1',[chat])),2);});
 await test('idempotency key rejects modified content',()=>denied('select public.send_message($1,$2,$3)',[chat,key,'Different body'],'22023'));
 await test('whitespace and overlong messages denied',async()=>{await denied('select public.send_message($1,gen_random_uuid(),$2)',[chat,' \n\t '],'22023');await denied('select public.send_message($1,gen_random_uuid(),$2)',[chat,'x'.repeat(4001)],'22023');});
