@@ -6,7 +6,7 @@
 
 - The configured live project exposes all six core messaging RPCs and denies anonymous execution.
 - Dependency audit: zero known vulnerabilities reported after installation.
-- 34 unit checks pass, covering reconciliation, input bounds, production configuration, password verification, origin checks, request size limits, and rate-limit refusal.
+- 37 unit checks pass, covering reconciliation, input bounds, production configuration, password verification, origin checks, request size limits, and rate-limit refusal.
 - 45 embedded PostgreSQL checks pass, including RLS/grants, idempotency, ordering, private-topic row authorization, read cursors, password-write isolation, server verification limits, and message persistence during notification failure.
 - Live PostgreSQL: 17 role-isolation assertions passed, with all fixtures rolled back and original application row counts unchanged. Anonymous private WebSocket subscription was rejected.
 - The production hardening migration and advisor privilege migration were applied. The password-protected profile Edge Function is deployed ACTIVE; its unauthenticated endpoint returns 401, and the server limiter is installed and unavailable to anonymous callers.

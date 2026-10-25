@@ -1,6 +1,6 @@
 # Verification and deployment gates
 
-Real Supabase integration is NOT RUN: the user chose to connect a project later. Demo interaction is not evidence of secure cross-account messaging.
+This file records verification chronologically. Early entries predate the Supabase connection. Current release results and remaining gates are summarized in docs/PRODUCTION_READINESS.md; demo interactions do not prove live cross-account messaging.
 
 ## Executed on 2026-10-25
 
@@ -45,7 +45,7 @@ No measured latency or availability guarantee. No E2EE. No executed hosted three
 
 ## Production-hardening session
 
-34 unit and 45 embedded PostgreSQL checks passed. A separate 17-assertion role matrix passed against the live PostgreSQL database inside a fully rolled-back transaction, leaving the original one profile and zero conversations/messages unchanged. A real anonymous private-channel WebSocket join returned CHANNEL_ERROR and initialized the provider-managed Realtime partitions. Core RPCs and the server limiter deny anonymous execution; the deployed profile function returns 401 without a user token. The unintended DDL-helper client grants were revoked.
+37 unit and 45 embedded PostgreSQL checks passed. A separate 17-assertion role matrix passed against the live PostgreSQL database inside a fully rolled-back transaction, leaving the original one profile and zero conversations/messages unchanged. A real anonymous private-channel WebSocket join returned CHANNEL_ERROR and initialized the provider-managed Realtime partitions. Core RPCs and the server limiter deny anonymous execution; the deployed profile function returns 401 without a user token. The unintended DDL-helper client grants were revoked.
 
 The built Worker passed local HTTP checks for CSP, nosniff, no-referrer, and the static health endpoint. The exact production artifact rendered at desktop size without browser errors or a demo fallback. Narrow-screen and demo profile/password/theme checks also passed; these demo checks do not prove live Auth password verification.
 

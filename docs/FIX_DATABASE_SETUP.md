@@ -35,3 +35,7 @@ supabase functions deploy update-profile
 Supabase supplies the Edge Function's URL, anon key, and server-only service-role key. Never put a service-role key into a Vite variable or browser. The function's gateway JWT check is disabled in `supabase/config.toml` because the handler validates the JWT explicitly with `auth.getUser`, including projects using current signing keys. The handler rejects missing or invalid JWTs and wrong passwords. Deploy the function and config together.
 
 Hosted password verification and the function deployment were not executed in this session because project administration access was unavailable. Windows browser automation stopped when it could not verify the browser URL. The SQL repair, update handler, and their security checks were verified locally.
+
+## Latest deployment status
+
+The core functions are now installed in the connected project. The production hardening and advisor migrations have been applied, and update-profile is deployed ACTIVE. Seventeen live PostgreSQL role checks passed with all fixtures rolled back; the unauthenticated Edge endpoint correctly returns 401. The earlier browser-access limitation no longer blocks these operations because the Supabase integration is connected. See docs/PRODUCTION_READINESS.md for remaining SMTP/staging/backup gates and the separate pending migration-history review.
