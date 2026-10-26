@@ -2,9 +2,9 @@
 
 ## Current release state
 
-The feature implementation and migration are prepared locally. **The production migration was rejected by automatic approval review and has not been applied.** The live frontend remains on its prior working deployment. No customer messages, profiles or account identities were changed by this feature work.
+The user explicitly approved the migration and required free-tier services only. **The production migration was applied successfully** and recorded as `20261026013327` (`social_presence`). Realtime private-only mode was confirmed by an anonymous public-channel probe returning `PrivateOnly: This project only allows private channels`. The tested frontend release is prepared for Vercel publication. No customer messages, profiles or account identities were changed by this feature work. No paid add-ons, resources or plan upgrades were requested.
 
-The reviewed migration is `supabase/migrations/20261026002230_social_presence.sql`. It is additive and is safe to rerun in the local setup bundle. It does not repair or rewrite the project's previously discussed baseline migration history.
+The reviewed migration is `supabase/migrations/20261026013327_social_presence.sql`. It is additive and is safe to rerun in the local setup bundle. It does not repair or rewrite the project's previously discussed baseline migration history.
 
 ## Proposed production changes
 
@@ -28,9 +28,9 @@ The security boundary changes are persistent: signed-in users gain friend-reques
 
 ## Required deployment checks
 
-1. Obtain explicit approval for the production migration after the automatic rejection. Do not bypass it via SQL Editor or another tool.
-2. Apply the exact reviewed migration, then check installed RPC grants and security advisors. Any new authenticated SECURITY DEFINER notices require the documented actor-bound review; do not expose these functions anonymously.
-3. In Supabase Realtime Settings, disable **Allow public access**, as required by Supabase's private-channel guidance. This setting has not been verified through the available tools.
+1. DONE: explicit user approval was received and the migration was applied through the native migration tool.
+2. DONE: the migration and activity policies are installed. The security-advisor review reports three additional authenticated SECURITY DEFINER notices for the deliberately narrow friend RPCs; these bind auth.uid(), fix search_path, return restricted data and deny anonymous execution. Existing limiter/no-policy and leaked-password-protection notices remain; no paid upgrade was enabled. See https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable .
+3. DONE: the user disabled **Allow public access**. An anonymous public channel is now rejected with the explicit PrivateOnly error.
 4. Deploy the exact tested frontend and verify live HTTP assets/security headers.
 5. Use two disposable authenticated accounts to check request arrival, accepted-friend presence, multiple tabs, typing expiry, reconnect, and outsider denial over actual WebSockets. Local SQL policy checks do not substitute for that complete hosted flow. Browser automation is unavailable in this session; no visual browser signoff is claimed.
 
