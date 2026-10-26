@@ -8,7 +8,7 @@
 - A signup at October 26 02:32:16 UTC is `user_repeated_signup`, HTTP 200. It is not evidence of a new confirmation email.
 - Requests at 02:35:09 and 02:38:45 UTC are recovery actions through `/magiclink`, HTTP 200. No matching explicit `mail.send` event was found. Request success alone does not prove recipient delivery.
 - Reload logs show email rate-limit changes from `2/1h` to `30` at 02:24:40 UTC, then to `60` at 02:34:06 UTC. This does not identify the current SMTP provider or prove its credentials/domain verification work.
-- Public DNS via Google DNS-over-HTTPS: `resend._domainkey.yapspace.lol` has a DKIM public key; `_dmarc.yapspace.lol` has `v=DMARC1; p=none;`; `send.yapspace.lol` is a CNAME to `send.forge.rmta.net` with SPF and MX answers on that target. Compare these with the exact records in the configured provider; do not replace them based only on an assumed provider layout.
+- Public DNS via Google DNS-over-HTTPS: `resend._domainkey.yapspace-agnivya.vercel.app` has a DKIM public key; `_dmarc.yapspace-agnivya.vercel.app` has `v=DMARC1; p=none;`; `send.yapspace-agnivya.vercel.app` is a CNAME to `send.forge.rmta.net` with SPF and MX answers on that target. Compare these with the exact records in the configured provider; do not replace them based only on an assumed provider layout.
 
 ## Remaining checks
 

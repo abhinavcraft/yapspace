@@ -1,6 +1,39 @@
 # YapSpace
 
-A calm, responsive one-to-one messaging app. React + TypeScript + Vite, backed by Supabase Auth, PostgreSQL, and private Realtime Broadcast.
+> Private, focused conversations for people who want a quieter place to talk.
+
+YapSpace is a responsive one-to-one messaging app built by **Abhinav Chaurasia**. It combines a minimal Discord-inspired interface with private Supabase-backed messaging, presence, friend requests, profile controls, and a polished mobile experience.
+
+## Screenshots
+
+### Desktop
+
+![YapSpace desktop light interface](public/images/yapspace-desktop-light.png)
+
+![YapSpace desktop dark interface](public/images/yapspace-desktop-dark.png)
+
+### Mobile
+
+![YapSpace mobile inbox](public/images/yapspace-mobile.png)
+
+![YapSpace mobile conversation](public/images/yapspace-mobile-chat.png)
+
+## Highlights
+
+- Private one-to-one conversations with reliable message delivery and retry handling.
+- Email/password authentication with optional Google sign-in through Supabase Auth.
+- Friend requests, online/offline presence, typing indicators, unread counts, and profile discovery by handle.
+- Dark mode, light mode, responsive layouts, keyboard-friendly controls, and a sliding mobile bottom navigation.
+- Profile editing for display name, username, and bio with password confirmation on every update.
+- A safe local demo mode for exploring the interface without sending real messages.
+
+## Stack
+
+React · TypeScript · Vite · Supabase Auth · PostgreSQL · Supabase Realtime · Vercel
+
+## Project status
+
+YapSpace is an open-source personal project maintained by Abhinav Chaurasia. Contributions, bug reports, and thoughtful product feedback are welcome.
 
 ## Run locally
 

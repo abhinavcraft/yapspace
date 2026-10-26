@@ -15,7 +15,7 @@ Preview: `E:/yapspace/YapSpace-email-preview.html`. Its buttons are intentionall
 
 The templates use presentation tables, inline styles, system fonts, responsive spacing, and an Outlook button fallback. No external images, fonts, trackers, or paid services are required for the designs. Actual email-client rendering should be checked with a test message after saving.
 
-Sender name/address, SMTP delivery and sending limits are separate Supabase settings. These HTML files do not configure a verified sender or resolve email rate limits. Use YapSpace as the sender name; only set an address on yapspace.lol after verifying that domain with your email provider.
+Sender name/address, SMTP delivery and sending limits are separate Supabase settings. These HTML files do not configure a verified sender or resolve email rate limits. Use YapSpace as the sender name; only set an address on yapspace-agnivya.vercel.app after verifying that domain with your email provider.
 
 To regenerate the HTML and preview, run `node scripts/generate-email-templates.mjs` from the app folder.
 

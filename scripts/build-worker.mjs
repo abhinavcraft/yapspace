@@ -10,7 +10,6 @@ const assets={};for(const path of list(client)){const key='/'+relative(client,pa
 const headers={};let include=false;for(const line of readFileSync(join(client,'_headers'),'utf8').split(/\r?\n/)){if(line==='/*'){include=true;continue;}if(line.startsWith('/')){include=false;continue;}const m=line.match(/^\s+([^:]+):\s*(.*)$/);if(include&&m)headers[m[1]]=m[2];}
 if(!headers['Content-Security-Policy'])throw Error('Worker security headers were not generated.');
 // Only generated output is replaced, after the absolute path guard above.
-rmSync(output,{recursive:true,force:true});mkdirSync(join(output,'server'),{recursive:true});mkdirSync(join(output,'.openai'),{recursive:true});
+rmSync(output,{recursive:true,force:true});mkdirSync(join(output,'server'),{recursive:true});
 writeFileSync(join(output,'server/index.js'),'export default ('+createStaticWorker.toString()+')('+JSON.stringify(assets)+','+JSON.stringify(headers)+');\n');
-writeFileSync(join(output,'.openai/hosting.json'),readFileSync('.openai/hosting.json'));
 console.log('Worker artifact built with '+Object.keys(assets).length+' embedded assets and enforced security headers.');

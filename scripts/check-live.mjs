@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 console.log('Ready for live-check JSON on stdin. Authorization is not logged.');
 const tty=process.stdin.isTTY;if(tty)process.stdin.setRawMode(true);
 const lines=createInterface({input:process.stdin,terminal:false});let input='';for await(const line of lines){input=line;break;}lines.close();if(tty)process.stdin.setRawMode(false);const config=JSON.parse(input||'{}');
-const origin=config.url||'https://yapspace-private-messaging.vocaldaisy6.chatgpt.site';
+const origin=config.url||'https://yapspace-agnivya.vercel.app';
 const headers=config.authorization?{'OAI-Sites-Authorization':'Bearer '+config.authorization}:{};
 let failed=false;
 try{

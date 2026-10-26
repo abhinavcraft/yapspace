@@ -3,10 +3,10 @@
 The sign-in and signup screens include **Continue with Google**. The button uses Supabase OAuth and the same authenticated app/onboarding flow as email accounts. A Google account signs in without requesting a Supabase confirmation email.
 
 - Google OAuth client type: Web application.
-- Authorized JavaScript origin: `https://yapspace.lol`.
+- Authorized JavaScript origin: `https://yapspace-agnivya.vercel.app`.
 - Google redirect URI: `https://qcmirozomkxradixsuqt.supabase.co/auth/v1/callback`.
-- Supabase Site URL and allowed redirect: `https://yapspace.lol/`.
-- Vercel Production `VITE_APP_URL`: `https://yapspace.lol`.
+- Supabase Site URL and allowed redirect: `https://yapspace-agnivya.vercel.app/`.
+- Vercel Production `VITE_APP_URL`: `https://yapspace-agnivya.vercel.app`.
 - Client ID and secret belong in Supabase's Google provider settings. The client secret must never appear in frontend code or VITE variables.
 - Google consent-screen audience must allow the intended users. A Google app left in Testing mode may restrict sign-in to designated test users; configure production publishing in Google Auth Platform when ready.
 
