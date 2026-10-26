@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { ArrowDown, ArrowLeft, ArrowRight, Check, CheckCheck, ChevronDown, CircleHelp, Coffee, Info, Leaf, LoaderCircle, LockKeyhole, LogOut, MessageCircle, MoreHorizontal, Plus, Search, Send, Settings, ShieldCheck, Smile, Sparkles, Users, WifiOff, X, Moon, Sun, UserRound, Hash } from 'lucide-react';
 import { AboutYou, Appearance, initialTheme, type Theme } from './PersonalSpace';
 import Auth from './Auth';
+import Landing from './Landing';
 import { ResetPassword } from './PasswordRecovery';
 import { friendlyError } from './network';
 import { SessionExpiredError } from './profile-validation';
@@ -28,6 +29,9 @@ export default function App(){
   const outbox=useRef<Record<string,Message>>({});
   const identityRef=useRef<string|null>(null);
   const [recovering,setRecovering]=useState(false),[profileFailed,setProfileFailed]=useState(false),[profileAttempt,setProfileAttempt]=useState(0);
+  const [entry,setEntry]=useState(window.location.hash);
+  useEffect(()=>{const update=()=>setEntry(window.location.hash);window.addEventListener('hashchange',update);return()=>window.removeEventListener('hashchange',update);},[]);
+  useEffect(()=>{if(entry==='#signin'||entry==='#join')window.scrollTo(0,0);},[entry]);
   const readsInFlight=useRef(new Set<string>());
   const [theme,setTheme]=useState<Theme>(initialTheme),[section,setSection]=useState<'messages'|'people'|'you'>('messages'),[demoProfile,setDemoProfile]=useState(demoUser);
   const touch=useRef<{x:number;y:number}|null>(null);
@@ -75,7 +79,7 @@ export default function App(){
   const filtered=conversations.filter(c=>(filter==='all'||c.unread_count>0)&&(c.display_name+' '+c.handle).toLowerCase().includes(query.toLowerCase()));const unread=conversations.reduce((n,c)=>n+(c.unread_count>0?1:0),0);
   if(recovering)return <ResetPassword onComplete={()=>{setRecovering(false);setAuthId(null);setDemo(false);}}/>;
   if(!authReady)return <div className="full-loading"><Brand/><LoaderCircle className="spin"/></div>;
-  if(!isDemo&&!authId)return <Auth onDemo={()=>setDemo(true)} theme={theme} onTheme={toggleTheme}/>;
+  if(!isDemo&&!authId)return entry==='#signin'||entry==='#join'?<><a href="#" className="lp-auth-back">← Back to YapSpace</a><Auth key={entry} initialSignup={entry==='#join'} onDemo={()=>setDemo(true)} theme={theme} onTheme={toggleTheme}/></>:<Landing/>;
   if(!isDemo&&authId){
     const view=accountProfileView(authId,profileLoadedFor,profile,profileFailed,setupFor);
     if(view==='loading')return <div className="full-loading"><Brand/><LoaderCircle className="spin"/></div>;

@@ -5,8 +5,8 @@ import { RecoveryRequest } from './PasswordRecovery';
 import { emailRedirectUrl } from './auth-redirect';
 import type { Theme } from './PersonalSpace';
 import GoogleButton from './GoogleButton';
-export default function Auth({onDemo,theme,onTheme}:{onDemo:()=>void;theme:Theme;onTheme:()=>void}){
-  const [signup,setSignup]=useState(false),[recover,setRecover]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+export default function Auth({onDemo,theme,onTheme,initialSignup=false}:{onDemo:()=>void;theme:Theme;onTheme:()=>void;initialSignup?:boolean}){
+  const [signup,setSignup]=useState(initialSignup),[recover,setRecover]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [googleBusy,setGoogleBusy]=useState(false);
   async function googleSignIn(){
     if(!supabase||busy)return;
