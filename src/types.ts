@@ -1,4 +1,7 @@
 export type Profile = { id: string; handle: string; display_name: string; bio?: string };
+export type Relationship = {id:string;peer_id:string;requester_id:string;recipient_id:string;status:'pending'|'accepted';display_name:string;handle:string};
+export type PresenceStatus = 'online'|'offline'|'unknown';
+export type FriendAction = 'accept'|'decline'|'cancel'|'remove';
 export type Conversation = { id: string; peer_id: string; handle: string; display_name: string; last_body: string | null; last_message_at: string | null; unread_count: number; last_seq: number };
 export type Message = { id: string; conversation_id: string; sender_id: string; client_message_id: string; seq: number; body: string; created_at: string; status?: 'pending' | 'failed' };
 export function reconcile(previous: Message[], incoming: Message[]): Message[] {

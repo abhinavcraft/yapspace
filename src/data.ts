@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Conversation, Message, Profile } from './types';
+import type { Conversation, Message, Profile, Relationship, FriendAction } from './types';
 import { databaseError, validateProfile, SessionExpiredError, requiresReauthentication, type ProfileInput } from './profile-validation';
 import { timedFetch } from './network';
 import { withAccountSession } from './account-session';
@@ -43,7 +43,11 @@ export function syncDemo(){demo=loadDemo();}
 async function rpc<T>(name:string,params:Record<string,unknown>={}):Promise<T>{const {data,error}=await supabase!.rpc(name,params);if(error)throw databaseError(error);return data as T;}
 async function rpcRow<T>(name:string,params:Record<string,unknown>):Promise<T>{const {data,error}=await supabase!.rpc(name,params).single();if(error)throw databaseError(error);if(!data)throw new Error('The database did not confirm this operation.');return data as T;}
 async function accountSession(){const {data,error}=await supabase!.auth.getSession();if(error){if(requiresReauthentication(error))throw new SessionExpiredError();throw error;}return data.session;}
+async function accountRpc<T>(accountId:string,name:string,params:Record<string,unknown>={}):Promise<T>{return withAccountSession(accountId,accountSession,async token=>{const {data,error}=await supabase!.rpc(name,params).setHeader('Authorization','Bearer '+token);if(error)throw databaseError(error);return data as T;});}
 export const api = {
+  async relationships(isDemo:boolean,actor?:string):Promise<Relationship[]>{if(!isDemo)return accountRpc<Relationship[]>(actor||'','list_relationships');try{const saved=localStorage.getItem('yapspace.demo.friends');if(saved)return JSON.parse(saved);}catch{}return demoPeople.slice(0,4).map((p,i)=>({id:p.id,peer_id:p.id,display_name:p.display_name,handle:p.handle,status:i<2?'accepted':'pending',requester_id:i===2?p.id:'you',recipient_id:i===2?'you':p.id}));},
+  async requestFriend(isDemo:boolean,peer:string,actor?:string){if(!isDemo){await accountRpc(actor||'','send_friend_request',{p_recipient_id:peer});return;}const rows=await api.relationships(true);if(!rows.some(r=>r.peer_id===peer)){const p=demoPeople.find(p=>p.id===peer)!;rows.push({id:peer,peer_id:peer,display_name:p.display_name,handle:p.handle,status:'pending',requester_id:'you',recipient_id:peer});}localStorage.setItem('yapspace.demo.friends',JSON.stringify(rows));},
+  async friendAction(isDemo:boolean,peer:string,action:FriendAction,actor?:string){if(!isDemo){await accountRpc(actor||'','respond_friend_request',{p_peer_id:peer,p_action:action});return;}let rows=await api.relationships(true);rows=action==='accept'?rows.map(r=>r.peer_id===peer?{...r,status:'accepted' as const}:r):rows.filter(r=>r.peer_id!==peer);localStorage.setItem('yapspace.demo.friends',JSON.stringify(rows));},
   async profile(accountId:string):Promise<Profile|null>{return withAccountSession(accountId,accountSession,async token=>{const {data,error}=await supabase!.from('profiles').select('id,handle,display_name,bio').eq('id',accountId).setHeader('Authorization','Bearer '+token).maybeSingle();if(error)throw databaseError(error);if(data&&data.id!==accountId)throw new SessionExpiredError();return data;});},
   async completeProfile(accountId:string,handle:string,name:string){return withAccountSession(accountId,accountSession,async token=>{const {data,error}=await supabase!.rpc('complete_profile',{p_handle:handle,p_display_name:name}).setHeader('Authorization','Bearer '+token).single<Profile>();if(error)throw databaseError(error);if(!data||data.id!==accountId)throw new SessionExpiredError();return data as Profile;});},
   async updateProfile(isDemo:boolean,input:ProfileInput,password:string):Promise<Profile>{
