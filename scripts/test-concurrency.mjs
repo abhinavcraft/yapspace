@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto';
 export async function testConcurrency(connectionString){
   const {Client}=await import('pg');const admin=new Client({connectionString});const clients=[new Client({connectionString}),new Client({connectionString}),new Client({connectionString})];
   await admin.connect();await Promise.all(clients.map(c=>c.connect()));
-  const D='00000000-0000-0000-0000-000000000004',E='00000000-0000-0000-0000-000000000005';
+  // Use fresh identities so this independent-connection fixture cannot collide
+  // with users created by the main database test suite.
+  const D=randomUUID(),E=randomUUID();
   try{
     await admin.query('insert into auth.users values($1),($2)',[D,E]);
     for(const [i,id] of [D,E,D].entries()){await clients[i].query("select set_config('request.jwt.claim.sub',$1,false)",[id]);await clients[i].query('set role authenticated');}
